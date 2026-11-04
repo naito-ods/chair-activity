@@ -1,0 +1,77 @@
+Annotation-free continuous latent study, separate from existing DTW labels
+
+This folder compares compact masked AE/VAE models, conditional linear latent
+models, semantic HP/RPM/order summaries, and local observed-value predictors.
+It borrows cryoDRGN's continuous-representation/return-to-observations idea;
+it does not apply cryoDRGN's cryo-EM projection likelihood to chair logs.
+Latent dimension is not a number of treatment classes. No annotations or
+existing cluster labels are learning targets. Prediction improvement alone
+does not demonstrate a new recurring operation pattern.
+
+Environment: existing Python3.10 chair_c31 venv; NumPy, pandas, SciPy,
+scikit-learn, matplotlib. Torch/UMAP are not required. No GPU is required.
+Use OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 to bound memory/CPU threads.
+All commands below are from the repository root; local outputs are outside
+the repository under its parent C31/Output. Clinical input data are required
+locally and must never be committed. Use NEW output directories; preserve
+every freeze, failed result, correction, and code snapshot.
+
+Read AGENTS.md. Required original compact inputs are the existing exports:
+../Output/chair_hp_sequence_300_v3_20261104/{case_manifest,hp_intervals,hp_runs,
+observations,hp2_points,case_patterns}.csv. Original preprocessed source and
+meta files must match the SHA256 values recorded by that manifest.
+Some scripts intentionally use this fixed original-cohort path and verified
+case counts; this is a reproducible cohort-specific research workflow, not
+a generic package for arbitrary cohorts. Do not change counts silently.
+
+Implementation checks (no clinical input):
+  python scripts/chair_latent_v1/validate_latent_model.py
+  python scripts/chair_latent_v1/test_semantic_baseline.py
+
+V1, using a NEW directory ../Output/<new_v1>:
+  python scripts/chair_latent_v1/prepare_data.py --output ../Output/<new_v1>
+  python scripts/chair_latent_v1/experiment.py --output ../Output/<new_v1> --revision 2
+  python scripts/chair_latent_v1/improve.py --output ../Output/<new_v1>
+  python scripts/chair_latent_v1/final_evaluation.py --output ../Output/<new_v1> controls
+  python scripts/chair_latent_v1/final_evaluation.py --output ../Output/<new_v1> freeze
+  python scripts/chair_latent_v1/final_evaluation.py --output ../Output/<new_v1> evaluate
+  python scripts/chair_latent_v1/inspect_representation.py --output ../Output/<new_v1> --repeats 10
+  python scripts/chair_latent_v1/visualize_latent.py --output ../Output/<new_v1>
+
+The final test is ONE SHOT. Never retune from its scores or silently call a
+repeat independent confirmation. A new version requires a fresh untouched
+case cohort or an explicitly exploratory status. Source fingerprint guards
+refuse incompatible feature caches; do not bypass them by changing a label.
+
+V2, using a NEW directory ../Output/<new_v2>:
+  python scripts/chair_latent_v1/extend_cohort.py plan --output ../Output/<new_v2>
+  python scripts/chair_latent_v1/study_v2.py --old ../Output/<new_v1> --output ../Output/<new_v2>
+  python scripts/chair_latent_v1/extend_cohort.py extract --output ../Output/<new_v2> --workers 4
+
+Plan enumerates source metadata and hashes before numeric extraction. V2's
+eligibility differs explicitly from V1's v3-pattern cohort. All requested
+IDs and reasons remain in the ledger; there are no replacement cases.
+Before evaluate_v2.py, create execution_freeze.json containing
+{"code_sha256": {"/absolute/source/path.py": "actual SHA256", ...}}
+for study_v2.py,evaluate_v2.py,extend_cohort.py,prepare_data.py,experiment.py,
+semantic_baseline.py,improve.py,latent_model.py,final_evaluation.py and the
+unchanged scripts/chair_hp_sequence_v3/extract_hp_streams.py. Preserve the
+timestamp and source snapshot. Never write invented hashes or modify source
+after this freeze. Model/input hashes are already in selection_freeze.json.
+  python scripts/chair_latent_v1/evaluate_v2.py --output ../Output/<new_v2>
+  python scripts/chair_latent_v1/visualize_v2.py --output ../Output/<new_v2>
+
+The historical narrative report generator is retained locally and excluded
+from the public code-only package because it embeds run-specific conclusions.
+For a new study, write the report from its verified tables and independent
+review; do not copy a historical conclusion into a new result.
+
+Every numeric estimate is a model output. Missing source observations remain
+NaN; no forward filling/interpolation is used to manufacture raw waveforms.
+Read individual code timestamps when masking signals: shared RPM row time
+can otherwise leak hidden torque/pedal observations at bin boundaries.
+All public files here are code/re-execution guidance only. Case ledgers,
+data, generated plots/reports, evaluation reviews, and notification addresses
+remain local. No clinical treatment or external patient validation is claimed.
+
+Reference: https://pmc.ncbi.nlm.nih.gov/articles/PMC8183613/
