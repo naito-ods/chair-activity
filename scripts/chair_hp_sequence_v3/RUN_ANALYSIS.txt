@@ -1,0 +1,31 @@
+HP種類を軸にした作動順序とHP2回転数解析 v3
+
+環境: 既存 /home/knaito/venvs/chair_c31/bin/python。新しいpackage導入不要。
+入力: 前版case_manifest.csvの300症例を固定、元events_original.csv.gzから限定3列chunk読込。
+出力はC31/Output内の未使用ディレクトリ。元データ、旧Two-stage、旧v1/v2結果を変更しない。
+
+本回結果: Output/chair_hp_sequence_300_v3_20261104/report.html
+主定義: 90012最初ON→最後OFF。20039=1HP1/2HP2/3HP3scaler。
+低回転は0<RPM<=5000、高回転は40000付近（探索許容幅±10%、±5/15%感度）、間は中回転。
+訂正後の末尾仮説は HIGH→短いMID。初期LOW仮説は監査として保持する。
+HP3後低HP2/高回転主体/高→MIDは複数flagで、排他的3クラスではない。
+
+再実行は新しい出力先 OUT_ROOT を使い、C31から以下の順に実行する。
+1. python -B chair-activity/scripts/chair_hp_sequence_v3/extract_hp_streams.py --output OUT_ROOT --workers 8
+2. python -B chair-activity/scripts/chair_hp_sequence_v3/audit_hp3_confirmation.py --output OUT_ROOT --workers 8
+3. python -B chair-activity/scripts/chair_hp_sequence_v3/analyze_patterns.py --output OUT_ROOT
+4. python -B chair-activity/scripts/chair_hp_sequence_v3/review_scales.py --output OUT_ROOT
+5. python -B chair-activity/scripts/chair_hp_sequence_v3/extend_mid_tail.py --output OUT_ROOT
+6. python -B chair-activity/scripts/chair_hp_sequence_v3/validate_patterns.py --output OUT_ROOT
+7. python -B chair-activity/scripts/chair_hp_sequence_v3/summarize_sequence.py --output OUT_ROOT
+8. python -B chair-activity/scripts/chair_hp_sequence_v3/visualize_sequence.py --output OUT_ROOT
+
+pythonは既存venvの実体を使う。OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1を推奨。
+extract/auditはCPU8worker。数値FFillやDTWは使わない。
+stage版は同HPが他HP/unknownに切り替わるまでを1段階とし、主30秒macroとは別単位。
+
+summarize_sequence.pyの説明文には本回の固定実測値を含む。別cohort/パラメータでは
+CSV値を照合して文章を更新してから報告する。図は各CSVから再生成される。
+
+追跡: analysis_plan.json,mid_tail_plan.json,process/decisions.txt,各担当reviewとJSONLlogs。
+この分類はログ上の操作パターン候補。処置名・診断・外部再現性は未検証。

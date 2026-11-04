@@ -1,0 +1,46 @@
+DTWを使わない症例単位の数値・操作構成解析
+
+Python環境: /home/knaito/venvs/chair_c31/bin/python
+新規package導入は不要。Python bytecodeは-B、BLAS/OMPは1thread、case並列は8workers。
+元データ、既存Two-stage分類、既存解析結果は読み取り専用。
+解析結果はリポジトリ外のC31/Outputに保存する。
+
+本回の出力:
+ /media/knaito/Samsung_SSD/C31/Output/chair_numeric_multiview_300_v1_20261104
+主報告:
+ recording_semantics_v2/report.html
+意味修正前の15モデル比較:
+ report.html
+判断・検証・改善の過程:
+ process/ と recording_semantics_v2/process/
+
+再実行は新しい空の出力先を指定する。既存抽出/モデル結果は上書きしない。
+以下のOUT_ROOTは実際の未使用ディレクトリ名に置換する。root=C31から実行する。
+
+1. v1抽出
+ /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/extract_features.py --output OUT_ROOT --workers 8
+2. v1比較
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/cluster_compare.py --output OUT_ROOT --workers 8
+3. v1支持感度
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/robustness_review.py --output OUT_ROOT
+4. v2意味修正
+ /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/refine_recording_semantics.py --output OUT_ROOT/recording_semantics_v2 --workers 8
+5. v2補完なし比較
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/cluster_observed_v2.py --output OUT_ROOT/recording_semantics_v2 --workers 8
+6. 監査と数値要約
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/summarize_analysis.py --output OUT_ROOT
+7. 作図
+ /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/visualize_results.py --output OUT_ROOT
+ /home/knaito/venvs/chair_c31/bin/python -B chair-activity/scripts/chair_numeric_multiview_v1/visualize_v2.py --output OUT_ROOT/recording_semantics_v2
+
+summarize_analysis.pyのproseは本回の実測結果を説明する固定報告を含む。
+別cohort/パラメータで実行した際は、CSVの実測値を確認し、説明文を更新してから報告すること。
+本回は300固定cohort・4no-targetスキップというユーザー選択をassertする。
+
+重要な定義:
+ 90012 最初ON→最後OFF。途中消灯を含む。
+ 20776 変更時記録。次まで有効。20774=1の既知区間で時間加重。
+ 20101 0取上げ、1格納。取上げ時間は噴射時間ではない。
+ 他numericは観測1秒binの分位点。未観測をOFF/0としない。
+
+図やクラスタIDは操作パターン探索用。臨床処置名・診断ではなく、外部検証は未実施。

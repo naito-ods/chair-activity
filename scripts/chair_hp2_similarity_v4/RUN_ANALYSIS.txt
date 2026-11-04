@@ -1,0 +1,29 @@
+高回転HP2類似性 v4
+
+既存venv: /home/knaito/venvs/chair_c31/bin/python
+新規package導入不要。C31を作業directoryとし、OUT_ROOTは未使用のOutput下directoryに置換する。
+元入力は既存v3の高回転203blocks/67cases。旧区間・定義・判定・元データは変更しない。
+
+1 build_features.py --output OUT_ROOT
+2 compare_similarity.py --output OUT_ROOT --workers 8
+3 robustness.py --output OUT_ROOT
+4 audit_interpretation.py --output OUT_ROOT
+5 validate_similarity.py --output OUT_ROOT
+6 summarize_similarity.py --output OUT_ROOT
+7 visualize_similarity.py --output OUT_ROOT
+
+各commandは上のvenv python -B で、scriptのpathは
+ chair-activity/scripts/chair_hp2_similarity_v4/<scriptname>
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1を指定する。モデル出力の既存上書きを拒否する。
+compare_similarity.py --resume-finalizeは、既存モデル/距離/近隣の記述的exportのみを完了する回復用。
+model fitを再実行しない。原入力が同一であることを確認してから使用する。
+
+実測summaryに本回固定数値を含むため、別cohort/設定で実行した場合はCSV照合後にproseを更新する。
+主要特徴/品質ルール/seed/距離/重み/選択/検証はanalysis_plan.jsonとrobustness_plan.jsonに保存。
+主な出力:report.html, case_structure_candidates.csv, neighbors.csv, assignments.csv,
+cluster_profiles_supported.csv, support_and_weight_sensitivity.csv, stage_neighbor_comparison.csv。
+初期精度問題と修正前出力はprocess/pre_precision_fixとprecision_review.txtへ保持。
+
+注意:症例42/25候補は30秒高回転blockの典型像。大きい混合HPstageや処置名へ一般化しない。
+トルク/ペダル2各3対応bin未満は主numeric距離に入れない。NaNはOFF/0ではない。
+高回転内のRPM微差を距離に入れず、作動構造/数値/文脈を別viewにする。
