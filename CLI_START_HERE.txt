@@ -1,0 +1,10 @@
+Chair Log Research - CLI start here
+
+1) Read AGENTS.md first.
+2) Read README.md for the research plan and current status.
+3) Activate Python 3.10 environment:
+   source ~/venvs/chair_c31/bin/activate
+4) Treat /media/knaito/Samsung_SSD/C31/Output source/preprocessed inputs as read-only.
+5) Do not replace missing values with zero.
+6) Do not silently remove cases.
+7) Do not interpret unsupervised clusters as clinical treatment labels without validation.
