@@ -1,5 +1,13 @@
 # Chair Log Two-stage DTW Research Plan
 
+The original Two-stage plan below is retained as a baseline. Current, separately
+versioned non-DTW workflows are documented in [scripts/README.md](scripts/README.md).
+The latest `scripts/chair_context_v5/` compares whole-case HP3 and RPM-region
+order around observed high-RPM HP2 operation, with raw timelines, overlapping
+candidate patterns, case-level internal stability and separate numeric-level
+comparisons. See its `RUN_ANALYSIS.txt` for local input requirements. Clinical
+datasets, individual case figures and generated reports are not published here.
+
 ## Overview
 
 This project studies dental chair operation logs using unsupervised time-series analysis. The aim is to discover recurring operation patterns from the logs first, then evaluate whether those patterns are stable and interpretable across cases.

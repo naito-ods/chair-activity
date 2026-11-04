@@ -8,3 +8,6 @@ Chair Log Research - CLI start here
 5) Do not replace missing values with zero.
 6) Do not silently remove cases.
 7) Do not interpret unsupervised clusters as clinical treatment labels without validation.
+8) Current non-DTW code: scripts/README.md and each version's RUN_ANALYSIS.txt.
+9) For whole-case HP3/RPM order use scripts/chair_context_v5/RUN_ANALYSIS.txt.
+   Preserve all previous Stage 2 labels and use a new local output directory.

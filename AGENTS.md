@@ -1,5 +1,30 @@
 # AGENTS.md - Chair Log Activity / DTW Research Agent Instructions
 
+## User-confirmed definitions for the non-DTW branches (2026-11-04)
+
+These session-confirmed definitions supersede older provisional mappings below
+for separately versioned numeric/HP/context workflows; they do not authorize
+changing existing Stage 2 assignments.
+
+- Lamp 90012 first ON starts the case, final OFF ends it. Intermediate OFF stays
+  in the case. State/event changes persist until the next record; unknown before
+  the first applicable observation remains unknown.
+- 20039: operating HP, 0 OFF / 1 HP1 / 2 HP2 / 3 HP3 (scaler).
+- 20011: selected HP. 20774: scaler operating, 20776: scaler output setting.
+- 20742: RPM, 20743: torque, 20108: bulk opening, 10014/10015: pedal1/pedal2.
+- 20101 syringe: 0 picked up, 1 stored. Pickup does not establish spraying.
+- LOW is positive RPM <=5000, MID >5000 and below the high band. User defines
+  high near40000; the current analyst tolerance is36000..44000 inclusive, with
+  narrower/wider band sensitivity. Zero and missing are separate.
+- Numeric plots/features retain raw observed values. Never extend a numeric
+  value beyond its actual operating run to manufacture continuous waveforms.
+- User corrected the short lower-speed tail after HIGH to MID, not LOW.
+- Whole-case context, HP type and large operation order are the main current
+  research focus. Short waveform variation alone may carry little meaning.
+- Record decisions, review findings and corrections in separate process files.
+- Publish code/re-execution guidance to GitHub at work milestones; keep clinical
+  data, per-case figures, local reports and notification addresses out of commits.
+
 ## 1. Mission
 
 This repository analyzes dental chair logs to discover reproducible operation patterns without assuming clinical treatment labels in advance.

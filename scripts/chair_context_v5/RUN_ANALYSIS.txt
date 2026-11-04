@@ -1,0 +1,64 @@
+Whole-case HP context analysis v5 (no DTW)
+
+Work from the C31 workspace root. Use the existing Linux venv:
+  PY=/home/knaito/venvs/chair_c31/bin/python
+  CODE=chair-activity/scripts/chair_context_v5
+  OUT=Output/chair_context_v5_NEW_RUN
+  export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+
+Run in order (each script supports --help):
+  "$PY" -B "$CODE/build_context.py" --output "$OUT"
+  "$PY" -B "$CODE/review_context.py" --output "$OUT"
+  "$PY" -B "$CODE/analyze_context.py" --output "$OUT"
+  "$PY" -B "$CODE/enrich_context.py" --output "$OUT"
+  "$PY" -B "$CODE/summarize_context.py" --output "$OUT"
+  "$PY" -B "$CODE/visualize_context.py" --source-root Output/chair_hp_sequence_300_v3_20261104 --output-root "$OUT" --workers 8
+
+After all stages, rerun review_context.py --output "$OUT" to validate
+classification/model/numeric tables as well as extraction.
+
+Required local compact source: Output/chair_hp_sequence_300_v3_20261104
+and its case_manifest, hp_status_audit, hp_intervals, hp_runs, blocks,
+hp2_points, hp2_blocks, case_patterns CSV tables. build_context supports
+--source override. No source clinical datasets or individual figures are
+distributed with the code. Scripts require numpy, pandas, scipy,
+scikit-learn, joblib, threadpoolctl, matplotlib and Pillow in the existing
+venv. No full wide case tables are loaded. Prior workflow code remains
+available in scripts/chair_hp2_similarity_v4; analyze_context and enrich
+import its tested k-medoids fitting routine.
+
+Definitions:
+- Keep all 300 selected cases in audit, never silently drop cases.
+- Lamp first ON through final OFF boundaries inherited unchanged from v3.
+- HP2 LOW: 0<RPM<=5000; MID: 5000<RPM<36000; HIGH: 36000<=RPM<=44000.
+- Primary HIGH cohort: >=3 observed run/second bins and >=2 proxy seconds.
+- Case summary has 300 rows; main cohort has 97 rows (99 any HIGH,
+  previous high-dominant67 retained as a comparison).
+- Operation states held until next change, numeric raw observations retained.
+- Numeric proxy seconds weight observed bins by overlap with actual run;
+  not an assertion of continuously observed values.
+- Missing HP and missing RPM intervals remain unknown, never imputed as OFF.
+- Main comparison is HP3 total>=2s observed vs not observed crossed with
+  supported MID-dominant30s-block observed vs not observed. Four groups are
+  comparison rules, not unsupervised validation or confirmed procedure types.
+- Explore separate whole-case contextual k-medoids k2..6, five equal families,
+  case-level80% subsamples60repeats. Fixed semantic ranges, no DTW/no scaling fit.
+- Threshold sensitivity ARI and clustering internal ARI are different.
+- k3 is described because its silhouette/internalARI were largest among
+  tested alternatives. k/feature choice and cohort are exploratory.
+- Raw torque/pedal2/bulk comparisons use >=3 paired observed bins per case
+  and RPM zone, case medians first; these signals are not in context distance.
+
+Main outputs: report.html, report.txt, candidate_summary.csv,
+case_context_groups.csv, context_cluster_interpretation.csv,
+context_model_comparison.csv, context_case_subsampling.csv,
+context_definition_sensitivity.csv, context_quality_audit.json,
+raw_numeric_by_case_zone.csv, context_events.csv, cohort_scope.csv.
+All individual case figures remain local. Process records and independent
+source hashes are under process/. Prior labels/data are read-only.
+
+This implementation is cohort-specific and explicitly asserts the validated
+300/97/99/67 counts. Before applying a new cohort, update assertions, rerun
+independent validation and review report prose against the new tables.
+Report wording about specific numeric results is for the validated cohort.
+Use a new output folder; scripts refuse overwriting existing analysis stages.

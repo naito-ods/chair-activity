@@ -1,6 +1,11 @@
 # 実行方法と補助スクリプトの配置先
 
-このフォルダは今後の補助スクリプト用です。現時点の実行コードは、元の構成を維持して各解析フォルダに置いています。
+このフォルダには、既存DTW割当を保存したまま実行する、非DTWの別バージョン解析を置いています。各フォルダの `RUN_ANALYSIS.txt` に再実行手順と入力条件があります。
+
+- `chair_numeric_multiview_v1/`: 数値水準・イベントの複数ビュー比較と、記録方式を考慮した再評価。
+- `chair_hp_sequence_v3/`: HP種類、回転領域、HP3後の低回転、高回転後の短い中回転の順序解析。
+- `chair_hp2_similarity_v4/`: 高回転主体区間の作動構造とトルク・ペダル2による類似性比較。
+- `chair_context_v5/`: 高回転を観測する症例全体でHP3と中・低回転の前後文脈を比較。97症例の全体図、重複候補、文脈クラスタ内部安定性、数値水準の補助比較を出力。
 
 ## リポジトリの構成
 
@@ -12,11 +17,15 @@ chair-activity/
 ├── chair_300_pipeline_shortfall_v2/
 ├── chair_two_stage_replay_v1/
 ├── scripts/
-│   └── README.md
+│   ├── README.md
+│   ├── chair_numeric_multiview_v1/
+│   ├── chair_hp_sequence_v3/
+│   ├── chair_hp2_similarity_v4/
+│   └── chair_context_v5/
 └── .gitignore
 ```
 
-元の C31 内のファイル・フォルダはそのまま残してコピーしました。Pythonキャッシュ、データ、解析結果、仮想環境は含めていません。解析コードと既存の研究文書はコピー元と同一です。
+元の C31 内のファイル・フォルダは保存しています。Pythonキャッシュ、症例データ、個別図、解析結果、仮想環境はGitHubに含めません。各解析は既存venvを使用し、狭い列の読み込みと中間表の再利用でメモリ使用を抑えます。
 
 ## 環境準備
 
@@ -60,4 +69,4 @@ python chair_two_stage_replay_v1/visualize_two_stage_classes.py \
   --max-members 7 --max-points 500 --dpi 110
 ```
 
-Replayの出力先も未使用のディレクトリ名を指定してください。今回のリポジトリ構築では解析・Replayは実行していません。
+Replayの出力先も未使用のディレクトリ名を指定してください。解析データと生成レポートはローカルの `C31/Output/` に保存します。
