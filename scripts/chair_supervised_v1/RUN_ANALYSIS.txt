@@ -1,0 +1,104 @@
+Annotated interval learning and provisional unknown-time application
+
+This is a separate supervised branch. Existing unsupervised/DTW outputs and
+source data remain read-only. Treatment names are user annotations, not names
+assigned to unsupervised clusters. Instrument and treatment are separate
+targets; the annotated instrument is never a treatment input feature.
+
+Run from the C31 workspace root using the existing Python3.10 environment.
+GPU is not required. Check GPU usability before choosing a GPU backend.
+The tested implementation uses CPU, four tree workers, and bounded BLAS:
+  source ~/venvs/chair_c31/bin/activate
+  export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+  export MPLCONFIGDIR=/tmp/chair_supervised_matplotlib
+  CHAIR_CODE=chair-activity/scripts/chair_supervised_v1
+  CHAIR_OUT=Output/chair_supervised_NEW_RUN
+
+Required LOCAL inputs (never commit them): annotation CSV supplied by user;
+chair_export/<date>/<chair>/Chair_log_seq_*.dat; preprocessed case_summary.csv
+and available meta.json files under Output/chair_model_A_results/. The default
+annotation filename and temporal final split describe the verified cohort.
+Use a NEW output directory. A changed cohort/split requires a new analysis
+version and independent review; do not silently change count assertions.
+
+1. Input audit and read-only full-DAT feature extraction:
+  python "$CHAIR_CODE/extract.py" --output "$CHAIR_OUT"
+  python "$CHAIR_CODE/global_context.py" --output "$CHAIR_OUT" --case-root "$CHAIR_OUT"
+
+The export retains every annotation, unconfirmed status and missing instrument
+target. Original annotation IDs/time ranges are preserved. Full DAT coverage
+is used because some human intervals lie outside older lamp-based preprocessing.
+This does not change old analysis boundaries. Width normalization and explicit
+instrument aliases are recorded; clinical treatment names are not merged.
+
+2. Small interval models; every development comparison/prediction is saved:
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 1
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 2
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 0
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 4
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 3
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 6
+  python "$CHAIR_CODE/learning.py" develop --output "$CHAIR_OUT" --revision 5
+
+These revision numbers name feature/loss comparison families. Five folds group
+whole cases. Models include regularized logistic, small trees, PCA8/logistic,
+GaussianNB and small HistGradientBoosting. Imputers/scalers fit TRAIN folds only.
+Raw numeric NaNs are retained in exports; model tokens are not observations.
+Keep all rare-label support counts, unknown final labels and multi-instrument
+combinations in the audit, even when learnability cannot be estimated.
+
+3. Separate weak-window task, with the SAME predeclared chronological cases:
+  python "$CHAIR_CODE/window_data.py" --source "$CHAIR_OUT" --width 30 --step 15 --trim 5
+  python "$CHAIR_CODE/global_context.py" --output "$CHAIR_OUT/windows30" --case-root "$CHAIR_OUT"
+  python "$CHAIR_CODE/audit_window_coverage.py" --source "$CHAIR_OUT"
+  python "$CHAIR_CODE/skipped_seq_data.py" --source "$CHAIR_OUT"
+  python "$CHAIR_CODE/window_learning.py" develop --output "$CHAIR_OUT/windows30" --revision 1
+  python "$CHAIR_CODE/window_learning.py" develop --output "$CHAIR_OUT/windows30" --revision 2
+  python "$CHAIR_CODE/window_learning.py" develop --output "$CHAIR_OUT/windows30" --revision 3
+
+The annotation's label is inherited by interior windows: this is weak labeling,
+not independently verified point labels. Short/overlapping rejected windows
+have explicit reasons. Cases without eligible windows remain in source audit.
+Unannotated time is the complement of ALL human intervals, including uncertain
+ones; it is never a negative/background training target. Case, annotation-parent
+and within-parent window weights avoid treating many windows as independent.
+
+4. Freeze BOTH tasks before reading either final task's error patterns:
+  python "$CHAIR_CODE/learning.py" freeze --output "$CHAIR_OUT"
+  python "$CHAIR_CODE/window_learning.py" freeze --output "$CHAIR_OUT/windows30"
+  python "$CHAIR_CODE/learning.py" evaluate --output "$CHAIR_OUT"
+  python "$CHAIR_CODE/window_learning.py" evaluate --output "$CHAIR_OUT/windows30"
+
+Final is ONE SHOT. Fixed source/model/data hashes are verified. Do not retune
+models or thresholds on final errors. The two tasks share final cases and are
+correlated evidence, not independent replication. Report class-specific results,
+all-present vs development-supported label metrics, full confusion matrices,
+case-level uncertainty, and empirical selective precision/coverage. Scores are
+not calibrated clinical probabilities. A high-confidence unseen-use error is
+possible even for a recognizable instrument pattern.
+
+5. Apply only the INTERSECTION of interval/window supported labels:
+  python "$CHAIR_CODE/apply_windows.py" --source "$CHAIR_OUT"
+  python "$CHAIR_CODE/raw_support_overlay.py" --source "$CHAIR_OUT"
+  python "$CHAIR_CODE/visualize.py" --output "$CHAIR_OUT" --dpi 110
+
+Classifiers used for a query exclude that query case. Global development model
+selection/threshold policy is not fully nested evaluation. Keep every unknown,
+ambiguous and unobservable case; keep short unscanned tails. Required in-window
+operation support and instrument compatibility do not establish specificity on
+unlabeled background. Outputs are provisional review candidates, not confirmed
+treatment annotations. Never write predictions into the human annotation CSV.
+
+Overlapping windows must not be summed as duration. Candidate segments are
+atomic consensus window spans and may include OFF/unknown portions; they are
+not actual instrument runtime. raw_support_overlay keeps old predictions and
+adds raw HP3/OFF/unknown evidence plus exact observed HP3 runs. The 20774 channel
+is corroborating operation information, not additional time to add to HP3.
+
+Every run saves tables, predictions, thresholds, model pickles, source integrity,
+process logs, failed-source snapshots and raw plots locally. Historical clinical
+interpretation/report-generation scripts and generated narrative reports are
+retained only locally, outside this public code package. Review all newly
+generated scientific text against its actual tables before sharing a report.
+No annotation CSV, model/data arrays, per-case plots, process reviews or email
+addresses belong in GitHub. The public package is source/re-execution only.
