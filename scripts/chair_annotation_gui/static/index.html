@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chair Log · 連続アノテーション</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-icon">C</span><div><strong>Chair Log</strong><small>CONTINUOUS ANNOTATION</small></div></div>
+  <div class="top-title">処置の流れを、空白も含めて記録する</div>
+  <span class="local-badge">● ローカル保存</span>
+  <button id="helpButton" class="quiet">使い方</button>
+</header>
+<div id="message" role="status" aria-live="polite" hidden></div>
+<main class="workspace">
+  <aside class="case-panel">
+    <div class="eyebrow">WORKSPACE</div><h1>症例</h1>
+    <label class="sr-only" for="caseSearch">症例を検索</label><input id="caseSearch" type="search" placeholder="番号・日付・チェアを検索">
+    <div id="caseCount" class="subtle">読み込み中…</div><div id="caseList" class="case-list"></div>
+    <div class="storage-note"><strong>原ログは読み取り専用</strong><br>新しい注釈は別フォルダに保存します。<details><summary>保存先</summary><code id="outputPath"></code></details></div>
+  </aside>
+  <section class="main-panel">
+    <div class="case-heading"><div><div class="eyebrow">CASE TIMELINE</div><h2 id="caseTitle">症例を選択</h2><div id="caseMeta" class="subtle"></div></div><div class="save-state"><span id="saveStatus">未選択</span><button id="saveButton" class="secondary" disabled>保存</button></div></div>
+    <div class="case-settings">
+      <label>記入者<input id="annotator" placeholder="氏名または研究用ID" autocomplete="off"></label>
+      <label>症例の用途<select id="studyRole"><option value="unassigned">未設定</option><option value="development">開発・基準作り</option><option value="validation">検証</option><option value="held_out">最終評価用</option></select></label>
+      <div class="scope"><label>対象範囲（秒）<span><input id="scopeStart" type="number" min="0" step="0.001" value="0"><b>–</b><input id="scopeEnd" type="number" min="0" step="0.001"></span></label><button id="scopeApply" class="quiet">設定</button></div>
+    </div>
+    <section class="card timeline-card">
+      <div class="card-heading"><div><h3>原観測とアノテーション</h3><p>ドラッグで区間を選択 · クリックで時刻を指定</p></div><div class="toolbar"><button id="zoomSelection" title="選択区間を拡大">選択を拡大</button><button id="zoomOut">−</button><button id="zoomIn">＋</button><button id="resetView">全体</button></div></div>
+      <div class="signal-controls"><label>信号1<select id="signal1"></select></label><label>信号2<select id="signal2"></select></label><label>信号3<select id="signal3"></select></label><span id="plotCounts" class="subtle"></span></div>
+      <canvas id="timeline" aria-label="原ログ・既存注釈・編集区間の時間軸。区間は右の秒数入力でも指定できます。"></canvas>
+      <div class="timeline-footer"><span id="cursorTime">時刻 —</span><span>点＝原観測値。補間なし。イベントの空白は「処置なし」ではありません。</span></div>
+    </section>
+    <section class="card review-card">
+      <div class="card-heading"><div><h3>連続区間 <span id="intervalCount" class="count">0</span></h3><p id="coverageText">対象範囲を確認してください</p></div><div class="toolbar"><button id="newInterval">＋ 区間</button><button id="fillGaps">未記入を「不明」に</button><button id="undoButton" disabled>元に戻す</button></div></div>
+      <div class="coverage-track"><div id="coverageBar"></div></div>
+      <div class="table-scroll"><table><thead><tr><th>区間（秒）</th><th>臨床行為</th><th>器具</th><th>確認</th></tr></thead><tbody id="intervalRows"></tbody></table><div id="emptyIntervals" class="empty">タイムラインをドラッグするか、「＋ 区間」から記録を始めます。</div></div>
+      <details id="qualityDetails"><summary id="qualitySummary">品質チェック</summary><div id="qualityList"></div></details>
+    </section>
+    <section class="card reference-card">
+      <details id="legacyDetails"><summary>既存の注釈を参照 <span id="legacyCount" class="count">0</span></summary><p class="subtle">原データを変更しません。「下書きへ追加」後に、器具の英語名と確認根拠を見直してください。</p><div id="legacyRows"></div></details>
+      <details id="mediaDetails"><summary>確認用の動画を開く</summary><p class="subtle">動画はこのブラウザ内で再生します。サーバーへのアップロードはありません。再起動時は同じ動画を選び直してください。</p><input id="videoFile" type="file" accept="video/*"><label>動画の0秒に対応するログ時刻（秒）<input id="videoOffset" type="number" step="0.001" value="0"></label><p id="videoName" class="subtle"></p><video id="video" controls preload="metadata"></video><div class="toolbar"><button id="videoToCursor">動画を指定時刻へ</button><button id="startFromVideo">動画時刻 → 開始</button><button id="endFromVideo">動画時刻 → 終了</button><span id="videoTime" class="subtle"></span></div></details>
+    </section>
+    <section class="export-bar"><div><strong>注釈を持ち出す</strong><p>JSONで再編集、CSVで解析。品質チェックと原ログのSHA256を含みます。</p><label class="batch-option"><input id="exportAll" type="checkbox"> 全保存症例をまとめる（未保存症例は対象外）</label></div><div class="export-actions"><label class="button secondary">JSON再読込<input id="importJson" type="file" accept=".json,application/json" hidden></label><button id="draftExport">下書き出力</button><button id="finalExport" class="primary">最終出力 ZIP ↓</button></div></section>
+  </section>
+  <aside class="editor-panel">
+    <div class="editor-heading"><div class="eyebrow">INTERVAL EDITOR</div><h2 id="editorTitle">区間を記録</h2><p id="editorHint" class="subtle">臨床行為とログの観測状況を分けて記録します。</p></div>
+    <form id="intervalForm">
+      <fieldset id="editorFields" disabled>
+      <div class="two-col"><label>開始（秒）<input id="start" type="number" step="0.001" min="0" required></label><label>終了（秒）<input id="end" type="number" step="0.001" min="0" required></label></div>
+      <label>臨床行為<select id="clinicalStatus"><option value="unknown">不明</option><option value="treatment">処置名あり</option><option value="procedure_unspecified">処置あり・内容不明</option><option value="no_procedure">確認された処置なし</option></select></label>
+      <label>処置名（日本語）<input id="treatment" list="treatmentSuggestions" placeholder="例：う蝕除去、ボンディング"><datalist id="treatmentSuggestions"></datalist></label>
+      <div class="section-label">器具</div>
+      <label>器具の確認状態<select id="instrumentStatus"><option value="unknown">不明・未確認</option><option value="known">器具を選択</option><option value="none">器具なしを確認</option></select></label>
+      <div id="instrumentChooser" hidden><label class="sr-only" for="instrumentSearch">器具名を検索</label><input id="instrumentSearch" type="search" placeholder="英語名で検索"><div id="selectedInstruments" class="chips"></div><div id="instrumentOptions" class="instrument-options"></div><label>区間内の器具の関係<select id="instrumentRelation"><option value="uncertain">関係は未確認</option><option value="single">単一の器具</option><option value="simultaneous">同時使用を確認</option><option value="sequential">順番に使用</option></select></label></div>
+      <label>ログの観測状況<select id="observationStatus"><option value="unreviewed">未確認</option><option value="events_present">記録あり</option><option value="sparse">記録が疎ら</option><option value="no_target_events">対象コードの記録なし</option><option value="suspected_recording_gap">記録の途絶が疑われる</option></select></label>
+      <div class="section-label">確認根拠</div>
+      <div id="evidenceOptions" class="evidence-grid"><label><input type="checkbox" value="video">動画</label><label><input type="checkbox" value="direct_observation">直接観察</label><label><input type="checkbox" value="clinical_record">診療記録</label><label><input type="checkbox" value="log_inference">ログからの推測</label><label><input type="checkbox" value="legacy_annotation">既存の注釈</label><label><input type="checkbox" value="unknown">不明</label></div>
+      <label>根拠の詳細<input id="evidenceDetail" placeholder="動画名・時刻、観察記録など"></label>
+      <label>臨床内容の確実性<select id="certainty"><option value="uncertain">不明・確かでない</option><option value="probable">推定</option><option value="confirmed">根拠により確認済み</option></select></label>
+      <div class="section-label">境界の確かさ</div>
+      <label class="sr-only" for="boundaryCertainty">境界の確かさ</label><select id="boundaryCertainty"><option value="unknown">境界の誤差は不明</option><option value="approximate">おおよその時刻</option><option value="exact">境界を明確に確認</option></select>
+      <div class="two-col"><label>開始の誤差 ±秒<input id="startUncertainty" type="number" min="0" step="0.1" placeholder="不明なら空欄"></label><label>終了の誤差 ±秒<input id="endUncertainty" type="number" min="0" step="0.1" placeholder="不明なら空欄"></label></div>
+      <label>メモ<textarea id="notes" rows="2" placeholder="判断に迷った点、器具の種類・倍率など"></textarea></label>
+      <label class="review-check"><input id="reviewed" type="checkbox">この区間の記入内容を確認した</label><p class="subtle small">内容が不明でも、確認したうえで「不明」として残せます。</p>
+      <div id="formError" class="form-error" role="alert"></div>
+      <div class="editor-actions"><button type="submit" id="applyInterval" class="primary">区間を反映して保存</button><button type="button" id="cancelEdit">取消</button></div><div class="toolbar bottom-tools"><button type="button" id="splitInterval">指定時刻で分割</button><button type="button" id="deleteInterval" class="danger">削除</button></div>
+      </fieldset>
+    </form>
+  </aside>
+</main>
+<dialog id="helpDialog"><h2>連続アノテーションの使い方</h2><ol><li>左から症例を選択し、記入者と対象範囲を確認します。</li><li>タイムラインをドラッグして区間を選びます。右側で秒数を直接入力することもできます。</li><li>処置、器具、確認根拠、境界の確かさを記入し、「区間を反映して保存」を押します。</li><li>既存注釈は参考資料です。日本語の器具名を自動的に英語へ対応付けません。</li><li>未記入区間は「不明」にできます。「不明」と「処置なし」を区別してください。</li><li>記入者・未確認区間・重複・未記入のチェックを終えて「最終出力」を押します。下書きは途中でも出力できます。</li></ol><p>器具は区間内に登場したものです。複数選択だけでは、同時使用や全区間での稼働を意味しません。</p><p>ログから推測した処置を、独立した臨床正解として扱わないでください。確認済みの臨床行為には動画・直接観察・診療記録の根拠を記入します。</p><p>保存履歴は毎回残ります。JSON再読込にはZIP内の annotations.json を使用してください。動画は保存されません。</p><p><kbd>Ctrl</kbd> + <kbd>S</kbd> 保存 · <kbd>N</kbd> 新しい区間 · <kbd>[</kbd> 開始を指定時刻へ · <kbd>]</kbd> 終了を指定時刻へ</p><button id="closeHelp" class="primary">閉じる</button></dialog>
+<script src="/app.js"></script>
+</body></html>
