@@ -14,12 +14,13 @@ from .features import NumericEncoding
 
 
 class LocalModel:
-    def __init__(self, num_kernels=10000, batch_size=256, epochs=10, seed=20261106, n_jobs=1, cache_dir=None, cache_design=True):
+    def __init__(self, num_kernels=10000, batch_size=256, epochs=10, seed=20261106, n_jobs=1, cache_dir=None, cache_design=True, center_rocket=True):
         if num_kernels < 0 or batch_size < 1 or epochs < 1:
             raise ValueError("Invalid model configuration")
         self.num_kernels, self.batch_size, self.epochs = int(num_kernels), int(batch_size), int(epochs)
         self.seed, self.n_jobs = int(seed), int(n_jobs)
         self.cache_dir, self.cache_design = cache_dir, bool(cache_design)
+        self.center_rocket = bool(center_rocket)
 
     def batches(self, n):
         for start in range(0, n, self.batch_size):
@@ -70,7 +71,7 @@ class LocalModel:
             self.rocket = Rocket(num_kernels=self.num_kernels, normalise=False, n_jobs=self.n_jobs, random_state=self.seed)
             # Kernels use the TRAIN tensor shape; no query series is used.
             self.rocket.fit(self.encoding.transform(tensor[:self.batch_size]))
-            self.rocket_scaler = StandardScaler(with_mean=False)
+            self.rocket_scaler = StandardScaler(with_mean=self.center_rocket)
             for number, batch in enumerate(self.batches(len(meta))):
                 self.rocket_scaler.partial_fit(self.rocket_features(tensor[batch]))
                 if number % 40 == 0:

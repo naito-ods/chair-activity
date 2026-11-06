@@ -20,16 +20,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
     parser.add_argument("--canonical", required=True)
+    parser.add_argument("--fullfit-dir", default="fullfit")
+    parser.add_argument("--oof-dir", default="primary_oof")
+    parser.add_argument("--out-prefix", default="")
     args = parser.parse_args()
     root, canonical = Path(args.root), Path(args.canonical)
-    output = root / "unknown_interval_candidates.csv"
+    output = root / f"{args.out_prefix}unknown_interval_candidates.csv"
     if output.exists():
         raise FileExistsError(output)
     source_hash = sha(canonical)
     a = pd.read_csv(canonical, dtype={"seq": str}, keep_default_na=False)
     original = a.copy(deep=True)
-    full = pd.read_csv(root / "fullfit/inference.csv.gz", dtype={"case_id": str}, keep_default_na=False)
-    oof = pd.read_csv(root / "primary_oof/predictions.csv.gz", dtype={"case_id": str}, keep_default_na=False)
+    full = pd.read_csv(root / args.fullfit_dir / "inference.csv.gz", dtype={"case_id": str}, keep_default_na=False)
+    oof = pd.read_csv(root / args.oof_dir / "predictions.csv.gz", dtype={"case_id": str}, keep_default_na=False)
     if full.id.tolist() != oof.id.tolist():
         raise ValueError("Fullfit and OOF center IDs disagree")
     rows = []
@@ -58,11 +61,11 @@ def main():
     proposals.to_csv(output, index=False)
     joined = a.merge(proposals[["id", "center_sequence_candidate", "oof_sequence_candidate", "requires_human_review",
                               "candidate_human_confirmed", "no_center_inside_interval"]], on="id", how="left", validate="one_to_one")
-    joined.to_csv(root / "annotations_with_unknown_and_center_candidates.csv", index=False)
+    joined.to_csv(root / f"{args.out_prefix}annotations_with_unknown_and_center_candidates.csv", index=False)
     pd.testing.assert_frame_equal(joined[a.columns], original)
     if sha(canonical) != source_hash:
         raise ValueError("Source canonical table changed")
-    save_json(root / "process/unknown_candidate_audit.json", {"source_sha256": source_hash, "canonical_rows": len(a),
+    save_json(root / "process" / f"{args.out_prefix}unknown_candidate_audit.json", {"source_sha256": source_hash, "canonical_rows": len(a),
         "unknown_rows": len(proposals), "rows_with_center_support": int((proposals.centers_inside_interval > 0).sum()),
         "rows_without_center_support": int(proposals.no_center_inside_interval.sum()),
         "source_columns_preserved_exactly": True, "unknown_clinical_accuracy_available": False,

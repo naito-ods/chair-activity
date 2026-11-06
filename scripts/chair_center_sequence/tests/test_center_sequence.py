@@ -227,6 +227,18 @@ class SequenceTests(unittest.TestCase):
 
 
 class ModelTests(unittest.TestCase):
+    def test_sgd_rocket_block_has_zero_training_mean_and_legacy_mode_is_explicit(self):
+        g, f, x = self.fixture()
+        centered = LocalModel(num_kernels=16, epochs=1, batch_size=4).fit(f, g, x)
+        self.assertTrue(centered.rocket_scaler.with_mean)
+        r = int(centered.keep.sum())
+        self.assertGreater(r, 0)
+        np.testing.assert_allclose(centered.design(f, x)[:, -r:].mean(axis=0), 0., atol=1e-12)
+        legacy = LocalModel(num_kernels=16, epochs=1, batch_size=4, center_rocket=False).fit(f, g, x)
+        self.assertFalse(legacy.rocket_scaler.with_mean)
+        np.testing.assert_array_equal(centered.rocket_scaler.mean_, legacy.rocket_scaler.mean_)
+        np.testing.assert_array_equal(centered.rocket_scaler.var_, legacy.rocket_scaler.var_)
+
     def test_summary_roundoff_variance_is_never_amplified(self):
         g, f, _ = self.fixture()
         f[:, 0] = 1e-17 * np.arange(len(f))

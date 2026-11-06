@@ -1,4 +1,4 @@
-Center-time local logs + procedure sequence, version 0.1.3
+Center-time local logs + procedure sequence, version 0.1.4
 
 Generic code and synthetic tests only. Private input data, fitted models,
 per-case predictions, study results and notification addresses are excluded.
@@ -158,3 +158,18 @@ Thread-count changes require numerical parity verification; they are not
 changes to seed, epoch order, weights, regularization or train/query cases.
 Do not silently mix independent fold runs: validate exact one-time query
 coverage, training-class provenance, model hashes and source case folds.
+
+Centering for the SGD head in 0.1.4
+---------------------------------
+ROCKET StandardScaler now centers with TRAINING means by default. An
+uncentered transform can have large mean/standard-deviation ratios even after
+variance guarding, which can give SGD poorly conditioned input. Earlier Ridge
+heads handled an intercept differently, so a scaler suitable for that pipeline
+is not automatically suitable for SGD. The constructor option center_rocket=False
+is retained solely to reproduce the previous representation explicitly.
+
+Training/query cases must still be separate. Never center using query/cohort
+means or present an inspected-cohort correction as independent validation.
+Stored models preserve their fitted scaler.with_mean value; loading an older
+model does not change its predictions. Grouped comparisons and private source
+model/checkpoint provenance must be reported independently of this generic code.
