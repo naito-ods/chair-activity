@@ -1,0 +1,45 @@
+Learning temporal patterns with incomplete annotations
+
+patterns.py provides generic context_features() and anchor_features(). It has
+no clinical rows, case IDs, local paths, fitted parameters or study results.
+Use alongside numerics.py; raw numeric NaN must remain unknown in saved tensors.
+
+Neighbor-prediction task (no human query labels):
+- Sort regular-grid metadata by case and time; group key is seq.
+- scores are raw model margins aligned to a fixed label schema. available is
+  derived from TRAINING model classes, not a score/sentinel threshold.
+- context_features modes: current; past(current plus lags-1,-2,-4); bidir(add
+  +1,+2,+4); neighbors(no current raw/score block). The caller chooses grid step.
+- Train the same regularized classifier on each control, with train-only
+  imputation/scaling and case/parent/window weights. Scores are not calibrated
+  clinical probabilities. Keep past-only and future-using tasks distinct.
+- For five outercase folds, strict two-fold-exclusion cross-fitting needs10base
+  fits. For outerf and outer-training-foldg, use a base trained without BOTHf,g
+  for current and EVERYneighbor window. A globally generated g-only OOF feature
+  is invalid because its model may have learnedf. Queryf may use anf-excluded
+  model. Record the inner/outer training-size distribution difference.
+
+Visible-human-annotation completion (a different task):
+- anchor_features expects visible annotations with seq,id,start_s,end_s,
+  confirmed,treatment_normalized and query metadata with id,seq,start_s,end_s,
+  known_teacher,annotation_id. It uses preceding2and following2confirmed anchors.
+- For a known training target, remove its WHOLEparent annotation from anchors.
+  Keep the neutral absent-anchor values separate from presence indicators.
+- A real missing-label stress test must remove each selected whole parent from
+  ALLteacher targets and ALLanchor tables, in everycase, not just rename its
+  held-out evaluation label. Freeze the vocabulary independently and seal truth
+  for scoring. Keep unsupported true classes as errors.
+- Compare raw-summary-only / anchors-only / raw+anchors with the same learner,
+  folds and hidden parents. A nearest-anchor copy is a useful simple baseline.
+- Remaining visible QUERYhuman anchors are allowed only when this task is
+  explicitly annotation-assisted. Do not call its result autonomous case inference.
+- Hidden-label mutation should not change visible teachers, inputs or predictions.
+
+Unknown is annotation status, not no-procedure. A multiclass unknown head learns
+coverage/abstention and can suppress real procedures in unannotated gaps. Keep
+known-only clinical candidates separately. Preserve source status=unknown and
+human_confirmed=False for proposals. Report actual-unknown accuracy as unavailable
+without new clinical reference data, and distinguish synthetic hidden-parent
+recovery from performance on truly unannotated time. Audit full-time coverage,
+conflicts/pending reasons, short unscanned tails, group separation, source hashes,
+all model controls and evaluator findings. Never publish private input/results.
