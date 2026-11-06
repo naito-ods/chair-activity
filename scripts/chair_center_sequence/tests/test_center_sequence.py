@@ -80,6 +80,52 @@ class CenterTests(unittest.TestCase):
 
 
 class FeatureTests(unittest.TestCase):
+    def test_fully_known_state_never_creates_phantom_unknown_occupancy(self):
+        times = np.r_[0., np.linspace(.01, 999.7, 400)]
+        e = pd.DataFrame({"time_s": times, "code": "20039", "value": np.arange(len(times)) % 2})
+        log = CaseLog(e, 1000.)
+        centers = np.arange(10.5, 980, 1.)
+        batch = log.summaries(centers)
+        for width in [2, 5, 10]:
+            self.assertTrue((batch[f"w{width}:20039:state:unknown"] == 0).all())
+
+    def test_repeated_identical_numeric_values_have_exact_zero_std(self):
+        e = pd.DataFrame({"time_s": np.linspace(0, 9.9, 100), "code": "20742", "value": .1})
+        log = CaseLog(e, 10.)
+        centers = np.arange(.5, 10., 1.)
+        for source in [pd.DataFrame([log.summary(t) for t in centers]), log.summaries(centers)]:
+            for width in [2, 5, 10]:
+                self.assertTrue((source[f"w{width}:20742:std"] == 0).all())
+                self.assertTrue((source[f"w{width}:20742:mean"] == .1).all())
+
+    def test_exact_fractional_right_boundary_remains_excluded_in_past_mode(self):
+        log = CaseLog(pd.DataFrame({"time_s": [.1], "code": ["20742"], "value": [123.]}), 2.)
+        scalar = log.summary(.1, widths=(2.,), mode="past")
+        batch = log.summaries([.1], widths=(2.,), mode="past")
+        self.assertEqual(scalar["w2:20742:observed_count"], 0)
+        self.assertEqual(batch["w2:20742:observed_count"].iloc[0], 0)
+        scalar_x = log.tensor(.1, mode="past")
+        batch_x = log.tensors([.1], mode="past")[0]
+        self.assertEqual(scalar_x[N_STATE + len(NUMERIC)].sum(), 0)
+        np.testing.assert_array_equal(scalar_x, batch_x)
+    def test_vectorized_summary_and_tensor_match_scalar_fractional_logs(self):
+        rng = np.random.default_rng(57)
+        rows = []
+        for code, values in [("20039", [0, 1, 2, 3, np.nan]), ("20101", [0, 1, np.nan]),
+                             ("20011", [0, 1, 2, 3]), ("20742", [0, 1234, np.nan]), ("10014", [0, 1])]:
+            for time, value in zip(rng.uniform(0, 10.3, 30), rng.choice(values, 30)):
+                rows.append((time, code, value))
+        log = CaseLog(pd.DataFrame(rows, columns=["time_s", "code", "value"]), 10.3)
+        centers = np.r_[np.arange(.5, 10, 1), 10.15, .123, 4.8]
+        for mode in ["centered", "past"]:
+            scalar = pd.DataFrame([log.summary(t, mode=mode) for t in centers])
+            vector = log.summaries(centers, mode=mode)
+            self.assertEqual(scalar.columns.tolist(), vector.columns.tolist())
+            np.testing.assert_allclose(scalar, vector, rtol=1e-12, atol=1e-12, equal_nan=True)
+            scalar_x = np.stack([log.tensor(t, mode=mode) for t in centers])
+            vector_x = log.tensors(centers, mode=mode)
+            np.testing.assert_allclose(scalar_x, vector_x, rtol=1e-7, atol=1e-7, equal_nan=True)
+
     def test_initial_unknown_state_persistence_and_invalid_state_reset(self):
         log = CaseLog(events(), 10)
         np.testing.assert_allclose(log.occupancy("20101", 0, 2), [0, 0, 1])
@@ -181,6 +227,34 @@ class SequenceTests(unittest.TestCase):
 
 
 class ModelTests(unittest.TestCase):
+    def test_summary_roundoff_variance_is_never_amplified(self):
+        g, f, _ = self.fixture()
+        f[:, 0] = 1e-17 * np.arange(len(f))
+        m = LocalModel(num_kernels=0, epochs=1).fit(f, g)
+        self.assertEqual(m.summary_scaler.scale_[0], 1.)
+        self.assertTrue(m.summary_unscaled[0])
+        query = f[:1].copy(); query[0, 0] = 1.
+        self.assertLess(abs(m.design(query)[0, 0]), 2.)
+
+    def test_logspace_ovr_probabilities_remain_finite_for_extreme_margins(self):
+        g, f, _ = self.fixture()
+        g.loc[g.index[-2:], "target"] = "third"
+        m = LocalModel(num_kernels=0, epochs=1).fit(f, g)
+        m.classifier.coef_.fill(0)
+        m.classifier.intercept_[:] = [-10000., -10001., -10002.]
+        p = m.probabilities(f)
+        self.assertTrue(np.isfinite(p).all())
+        np.testing.assert_allclose(p.sum(axis=1), 1)
+        expected = np.exp([0., -1., -2.]); expected /= expected.sum()
+        np.testing.assert_allclose(p[0], expected)
+
+    def test_cached_design_has_identical_sgd_coefficients_and_predictions(self):
+        g, f, x = self.fixture()
+        cached = LocalModel(num_kernels=16, epochs=2, batch_size=4, cache_design=True).fit(f, g, x)
+        original = LocalModel(num_kernels=16, epochs=2, batch_size=4, cache_design=False).fit(f, g, x)
+        np.testing.assert_allclose(cached.classifier.coef_, original.classifier.coef_, rtol=0, atol=1e-13)
+        np.testing.assert_allclose(cached.probabilities(f, x), original.probabilities(f, x), rtol=0, atol=1e-13)
+
     def fixture(self):
         g, _ = attach_teachers(center_grid("A", 10), annotation([("a", 0, 5, "one", True), ("b", 5, 10, "two", True)]), 10)
         log = CaseLog(events(), 10)

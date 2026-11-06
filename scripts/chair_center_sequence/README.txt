@@ -1,9 +1,10 @@
-Center-time local logs + procedure sequence, version 0.1.0
+Center-time local logs + procedure sequence, version 0.1.3
 
-Implementation milestone. No clinical-data preparation, retraining, inference
-or accuracy comparison was performed to create this version. Verification uses
-synthetic data only, including a small ROCKET transform and a complete mock
-case-held-out workflow. Existing clinical annotations and models are untouched.
+Generic code and synthetic tests only. Private input data, fitted models,
+per-case predictions, study results and notification addresses are excluded.
+Keep real-data reanalysis in isolated private output directories and verify
+source hashes, coverage and case-held-out metrics. Do not overwrite source
+annotations or treat model candidates as confirmed clinical observations.
 
 Target and input
 ---------------
@@ -59,6 +60,8 @@ Only training-case annotations are accepted into the learned prior. Pending,
 overlapping and unknown gaps censor the sequence; they do not teach clinical
 transitions. Contiguous equal labels are merged only internally for duration
 estimation; source parents and training IDs remain separate.
+Visible annotation lengths are not censoring-corrected estimates of complete
+clinical action durations.
 These are lengths of visible annotation intervals, not censoring-corrected
 estimates of complete clinical action durations.
 
@@ -132,3 +135,26 @@ Then explicitly evaluate into another new directory:
 Settings are frozen in config.json and code fingerprints. Changed settings
 require separate preparation/output versions. The code imports without
 opening project data or starting fitting. No background job is installed.
+
+Numerical/performance corrections in 0.1.3
+----------------------------------------
+- Center-relative half-open bin endpoints; no endpoint reassociation.
+- Exact local state overlaps, explicit unknown integration and bound padding;
+  no 1-known complement or subtraction of large cumulative durations.
+- Coalesce equal-state heartbeats only for occupancy, retain raw record counts.
+- Exactly constant numeric observations have mean=value and std=0.
+- Train-only summary scales below 1024*eps(float64)*max(1,abs(mean)) are set to1
+  to disable numerical-noise amplification without discarding input fields.
+- One-vs-rest sigmoid normalization in log space prevents all-zero underflow.
+- Exact float64 standardized designs are cached transiently across unchanged
+  SGD epochs, then removed. --cache-dir chooses an explicit writable cache root.
+- Vectorized extraction matches the scalar reference, including fractional
+  boundaries, initial unknown, padding and missing numeric observations.
+
+Additional helpers, when present, use explicit paths and preserve input data.
+fullfit.py saves an all-case reusable model separately from held-out scoring.
+run_fold.py schedules one fixed fold with class-independent SGD threads.
+Thread-count changes require numerical parity verification; they are not
+changes to seed, epoch order, weights, regularization or train/query cases.
+Do not silently mix independent fold runs: validate exact one-time query
+coverage, training-class provenance, model hashes and source case folds.

@@ -36,6 +36,10 @@ class CaseLog:
                 q = q.drop_duplicates("time_s", keep="last")
                 times, values = q.time_s.to_numpy(float), q.value.to_numpy(float)
                 values = np.where(np.isin(values, STATE[code]), values, np.nan)
+                if len(values):
+                    changes = np.r_[not np.isnan(values[0]), ~((values[1:] == values[:-1]) |
+                                                              (np.isnan(values[1:]) & np.isnan(values[:-1])))]
+                    times, values = times[changes], values[changes]
                 # Initial unknown and invalid/unknown states persist until the
                 # next SAME-code record. Numeric observations never persist.
                 left = np.r_[0.0, times]
@@ -51,7 +55,9 @@ class CaseLog:
         left, right, values = self.segments[code]
         width = np.maximum(0.0, np.minimum(right, end) - np.maximum(left, start))
         known = [width[values == v].sum() / (end - start) for v in STATE[code]]
-        unknown = max(0.0, 1.0 - sum(known))
+        inside = max(0., min(self.duration, end) - max(0., start))
+        outside = max(0., (end - start) - inside)
+        unknown = (width[np.isnan(values)].sum() + outside) / (end - start)
         return np.array(known + [unknown], dtype=float)
 
     def summary(self, center, widths=(2.0, 5.0, 10.0), mode="centered"):
@@ -86,7 +92,10 @@ class CaseLog:
                 observed = values[np.isfinite(values)]
                 result[prefix + f"{code}:observed_count"] = float(len(observed))
                 for name, fn in [("median", np.median), ("mean", np.mean), ("std", np.std), ("min", np.min), ("max", np.max)]:
-                    result[prefix + f"{code}:{name}"] = float(fn(observed)) if len(observed) else np.nan
+                    if len(observed) and (observed == observed[0]).all() and name in {"mean", "std"}:
+                        result[prefix + f"{code}:{name}"] = float(observed[0]) if name == "mean" else 0.
+                    else:
+                        result[prefix + f"{code}:{name}"] = float(fn(observed)) if len(observed) else np.nan
         return result
 
     def tensor(self, center, width_s=30, mode="centered"):
@@ -96,8 +105,8 @@ class CaseLog:
             raise ValueError("ROCKET context width must be an integer >=11 seconds")
         if mode not in {"centered", "past"}:
             raise ValueError("Feature mode must be centered or past")
-        start = center - width_s / 2 if mode == "centered" else center - width_s
-        edges = start + np.arange(width_s + 1)
+        offsets = np.arange(width_s + 1) - (width_s / 2 if mode == "centered" else width_s)
+        edges = center + offsets
         x = np.full((len(CHANNELS), width_s), np.nan, dtype=np.float32)
         offset = 0
         for code, values in STATE.items():
@@ -114,6 +123,97 @@ class CaseLog:
             x[N_STATE + len(NUMERIC) + i] = np.isfinite(x[N_STATE + i])
         x[-1] = np.maximum(0, np.minimum(edges[1:], self.duration) - np.maximum(edges[:-1], 0))
         return x
+
+    def occupancies(self, code, starts, ends):
+        """Local overlap integrals avoid cancellation of cumulative durations."""
+        starts, ends = np.asarray(starts, float), np.asarray(ends, float)
+        if starts.shape != ends.shape or (ends <= starts).any():
+            raise ValueError("Invalid vector feature bounds")
+        left, right, values = self.segments[code]
+        span = ends - starts
+        result = np.zeros((len(starts), len(STATE[code]) + 1))
+        for first in range(0, len(starts), 128):
+            sl = slice(first, min(len(starts), first + 128))
+            overlap = np.maximum(0., np.minimum(right[None, :], ends[sl, None]) - np.maximum(left[None, :], starts[sl, None]))
+            for j, value in enumerate(STATE[code]):
+                result[sl, j] = overlap[:, values == value].sum(axis=1) / span[sl]
+            inside = np.maximum(0., np.minimum(self.duration, ends[sl]) - np.maximum(0., starts[sl]))
+            outside = np.maximum(0., span[sl] - inside)
+            result[sl, -1] = (overlap[:, np.isnan(values)].sum(axis=1) + outside) / span[sl]
+        return result
+
+    def summaries(self, centers, widths=(2., 5., 10.), mode="centered"):
+        """Batch summary, with raw-only numeric order statistics retained."""
+        centers = np.asarray(centers, float)
+        if not np.isfinite(centers).all() or ((centers < 0) | (centers >= self.duration)).any():
+            raise ValueError("Feature centers must be inside raw bounds")
+        if mode not in {"centered", "past"}:
+            raise ValueError("Invalid mode")
+        result = {}
+        for width in widths:
+            if not np.isfinite(width) or width <= 0:
+                raise ValueError("Invalid width")
+            starts = centers - width / 2 if mode == "centered" else centers - width
+            ends = centers + width / 2 if mode == "centered" else centers.copy()
+            prefix = f"w{width:g}:"
+            result[prefix + "available_fraction"] = np.maximum(0., np.minimum(self.duration, ends) - np.maximum(0., starts)) / width
+            for code, values in STATE.items():
+                fractions = self.occupancies(code, starts, ends)
+                for j, value in enumerate((*values, "unknown")):
+                    result[prefix + f"{code}:state:{value}"] = fractions[:, j]
+                times, _ = self.events[code]
+                lo = np.searchsorted(times, np.maximum(0., starts), side="left")
+                hi = np.searchsorted(times, np.minimum(self.duration, ends), side="left")
+                result[prefix + f"{code}:records"] = (hi - lo).astype(float)
+                left, _, segment_values = self.segments[code]
+                different = np.r_[False, ~((segment_values[1:] == segment_values[:-1]) |
+                                          (np.isnan(segment_values[1:]) & np.isnan(segment_values[:-1])))]
+                changes = left[different]
+                result[prefix + f"{code}:changes"] = (np.searchsorted(changes, ends, side="left") - np.searchsorted(changes, starts, side="left")).astype(float)
+            for code in NUMERIC:
+                times, values = self.events[code]
+                lo = np.searchsorted(times, np.maximum(0., starts), side="left")
+                hi = np.searchsorted(times, np.minimum(self.duration, ends), side="left")
+                stats = np.full((len(centers), 6), np.nan)
+                stats[:, 0] = 0.
+                for i, (a, b) in enumerate(zip(lo, hi)):
+                    v = values[a:b]
+                    v = v[np.isfinite(v)]
+                    if len(v):
+                        constant = (v == v[0]).all()
+                        stats[i] = [len(v), np.median(v), v[0] if constant else np.mean(v), 0. if constant else np.std(v), np.min(v), np.max(v)]
+                for j, name in enumerate(["observed_count", "median", "mean", "std", "min", "max"]):
+                    result[prefix + f"{code}:{name}"] = stats[:, j]
+        return pd.DataFrame(result)
+
+    def tensors(self, centers, width_s=30, mode="centered"):
+        """Batch exact tensors; reuse equal raw bin bounds, never interpolate."""
+        centers = np.asarray(centers, float)
+        if not np.isfinite(centers).all() or ((centers < 0) | (centers >= self.duration)).any():
+            raise ValueError("Feature centers must be inside raw bounds")
+        if not isinstance(width_s, int) or width_s < 11 or mode not in {"centered", "past"}:
+            raise ValueError("Invalid tensor configuration")
+        offsets = np.arange(width_s + 1) - (width_s / 2 if mode == "centered" else width_s)
+        edges = centers[:, None] + offsets
+        pairs, inverse = np.unique(np.column_stack([edges[:, :-1].ravel(), edges[:, 1:].ravel()]), axis=0, return_inverse=True)
+        bins, ends = pairs[:, 0], pairs[:, 1]
+        unique = np.full((len(CHANNELS), len(bins)), np.nan, np.float32)
+        offset = 0
+        for code, values in STATE.items():
+            unique[offset:offset + len(values) + 1] = self.occupancies(code, bins, ends).T
+            offset += len(values) + 1
+        for i, code in enumerate(NUMERIC):
+            times, values = self.events[code]
+            lo = np.searchsorted(times, np.maximum(0., bins), side="left")
+            hi = np.searchsorted(times, np.minimum(self.duration, ends), side="left")
+            for j in np.flatnonzero(hi > lo):
+                v = values[lo[j]:hi[j]]
+                v = v[np.isfinite(v)]
+                if len(v):
+                    unique[N_STATE + i, j] = np.median(v)
+            unique[N_STATE + len(NUMERIC) + i] = np.isfinite(unique[N_STATE + i])
+        unique[-1] = np.maximum(0., np.minimum(self.duration, ends) - np.maximum(0., bins))
+        return unique[:, inverse].reshape(len(CHANNELS), len(centers), width_s).transpose(1, 0, 2).copy()
 
 
 class NumericEncoding:

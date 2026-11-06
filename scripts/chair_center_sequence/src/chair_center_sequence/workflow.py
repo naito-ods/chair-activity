@@ -105,8 +105,8 @@ def prepare(args):
         case = CaseLog(events, duration)
         grid = center_grid(row.seq, duration, args.step_s)
         meta, ledger = attach_teachers(grid, a[a.case_id == row.seq], duration)
-        summaries = pd.DataFrame([case.summary(t, tuple(args.widths_s), args.mode) for t in grid.center_s])
-        tensors = np.stack([case.tensor(t, args.rocket_width_s, args.mode) for t in grid.center_s])
+        summaries = case.summaries(grid.center_s, tuple(args.widths_s), args.mode)
+        tensors = case.tensors(grid.center_s, args.rocket_width_s, args.mode)
         file = output / "cases" / f"{row.seq}.npz"
         np.savez_compressed(file, summary=summaries.to_numpy(float), tensor=tensors, ids=grid.id.to_numpy(str),
                             summary_names=summaries.columns.to_numpy(str), channels=np.array(CHANNELS))
@@ -189,10 +189,13 @@ def evaluate(args):
         va = np.flatnonzero(meta.fold == fold)
         if set(train_cases) & set(validation_cases) or not len(tr):
             raise ValueError("Case leakage or empty training fold")
-        model = LocalModel(args.num_kernels, args.batch_size, args.epochs, args.seed, args.n_jobs)
+        model = LocalModel(args.num_kernels, args.batch_size, args.epochs, args.seed, args.n_jobs, args.cache_dir)
         model.fit(summary[tr], meta.iloc[tr], tensor[tr] if args.num_kernels else None)
         prior = ProcedurePrior(args.sequence_strength).fit(annotations, model.classes, train_cases, durations)
         p = model.probabilities(summary[va], tensor[va] if args.num_kernels else None)
+        (output / "scores").mkdir(exist_ok=True)
+        np.savez_compressed(output / "scores" / f"fold{fold}.npz", indices=va, ids=meta.id.iloc[va].to_numpy(str),
+                            classes=np.array(model.classes), probabilities=p)
         predictions.loc[va, "local_candidate"] = np.asarray(model.classes)[p.argmax(axis=1)]
         predictions.loc[va, "truth_in_train_classes"] = meta.target.iloc[va].isin(model.classes).to_numpy()
         for case in validation_cases:
@@ -265,6 +268,7 @@ def parser():
     run.add_argument("--seed", type=int, default=20261106)
     run.add_argument("--n-jobs", type=int, default=1)
     run.add_argument("--sequence-strength", type=float, default=.2)
+    run.add_argument("--cache-dir", default=None, help="Transient design cache root; no fitted data cache is retained")
     return p
 
 
