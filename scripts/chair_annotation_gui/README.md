@@ -2,6 +2,28 @@
 
 原ログを参照しながら、ブランクを含む連続した臨床行為を人が記録するローカルアプリです。処置名は日本語、器具名は `instruments.json` の英語40種類で保存します。モデルの学習・推論は実行しません。
 
+## Windows・macOSへ移す（配布版1.1）
+
+`PORTABLE_GUIDE.html` をブラウザで開くと、移行手順を読めます。
+
+元のGUIの「別PCへ移す ZIP」から、アプリ・選択症例の原ログ・注釈の全保存履歴をまとめます。「全保存症例をまとめる」を選ぶと、全保存症例を対象にします。ZIPは内容とSHA256を照合してから完成ファイルとして保存します。未完了の下書きも移行できます。動画は別にコピーし、移行先で選び直してください。
+
+ZIP全体を展開し、Windowsでは `START_WINDOWS.bat`、macOSでは `START_MAC.command` を開きます。別PCにもPython 3.10以上が必要です。新規インストールは [Python公式サイト](https://www.python.org/downloads/) の現在の通常版を使用してください。Pythonを同梱したexe/appではありません。追加のpip/npmインストールやGPUは不要です。
+
+同梱データがあれば自動で使用し、アプリだけの配布版ではデータフォルダを選択します。ブラウザは自動で開き、空いているlocalhostのポートを使用します。起動時の端末は編集が終わるまで開いておきます。フォルダ設定はアプリ内の `launcher_config.json` に保存し、配布ZIPには含めません。
+
+別のフォルダを選ぶには `python3 launcher.py --choose-folder`（Windowsは `py -3 launcher.py --choose-folder`）。フォルダ選択画面が使えない環境では、端末でパスを入力できます。
+
+保存済み注釈の自動同期・複数PC間の競合統合はありません。作業を移すときに新しい移行ZIPを作り、既存フォルダに上書きせず別フォルダへ展開してください。移行後の保存先は `ChairLogAnnotator/C31/Output/chair_continuous_annotations_v1` です。原ログ・確認根拠・境界の誤差・履歴を保持します。
+
+Windows/macOS実機での起動確認は未実施です。Linuxで移行ZIP作成・別パスへの復元・再編集・出力をテストし、日本語読込はUTF-8を明示しています。
+
+アプリだけの配布ZIPを作成する場合:
+
+```bash
+python3 scripts/chair_annotation_gui/portable.py --output /path/to/new/ChairLogAnnotator_Windows_macOS.zip
+```
+
 ## 起動
 
 Python 3.10以降と、現行のChromeまたはFirefoxを使用します。Python標準ライブラリだけで動作し、pip/npmのインストールや外部CDNは不要です。
@@ -82,7 +104,7 @@ JSON再読込は対応する症例を開き、ZIP内の `annotations.json` を�
 ## テスト
 
 ```bash
-python3 -m unittest discover -s scripts/chair_annotation_gui/tests -p 'test_server.py' -v
+python3 -m unittest discover -s scripts/chair_annotation_gui/tests -p 'test_*.py' -v
 node --check scripts/chair_annotation_gui/static/app.js
 ```
 

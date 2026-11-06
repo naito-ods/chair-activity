@@ -97,6 +97,12 @@ try{
   assert.ok(collection,'Collection ZIP downloaded');
   const manifest=JSON.parse(execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("collection_manifest.json").decode())',path.join(output,collection)],{encoding:'utf8'}));
   assert.equal(manifest.actual_cases,1);assert.equal(manifest.actual_intervals,2);checks.push('All saved cases export with combined CSV and case manifest');
+  await click('transferExport');await wait("document.getElementById('message').textContent.includes('移行ZIPを出力しました')");
+  let transfer;
+  for(let i=0;i<100;i++){transfer=fs.readdirSync(output).find(x=>x.startsWith('chairlog_transfer_')&&x.endsWith('.zip'));if(transfer)break;await sleep(50);}
+  assert.ok(transfer,'Transfer ZIP downloaded');
+  const portable=JSON.parse(execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("ChairLogAnnotator/portable_manifest.json").decode())',path.join(output,transfer)],{encoding:'utf8'}));
+  assert.equal(portable.actual_cases,1);assert.equal(portable.videos_included,false);assert.equal(portable.cases[0].intervals,2);checks.push('GUI transfer exports application, selected raw logs and annotation history');
   // Optional real case: visualization only. No annotation changes or saves.
   if(realUrl){const old=await evaluate('performance.timeOrigin');await command('Page.navigate',{url:realUrl});await wait(`performance.timeOrigin>${old} && typeof S !== 'undefined' && S.doc && Object.keys(S.signals).length>0`);await sleep(100);assert.equal(await evaluate('S.doc.revision'),0);assert.equal(await evaluate("document.getElementById('message').classList.contains('error')"),false);await screenshot('real_case_readonly.png');checks.push('Real case loaded read-only with raw observations and legacy reference');}
   assert.deepEqual(exceptions,[]);

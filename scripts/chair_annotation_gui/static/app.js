@@ -150,6 +150,13 @@ for(const [id,factor]of [['zoomIn',.5],['zoomOut',2]])$(id).addEventListener('cl
 $('zoomSelection').addEventListener('click',guarded(()=>{if(!editorRecord)throw new Error('まず区間を選択してください。');const a=Number($('start').value),b=Number($('end').value);if(!(b>a))throw new Error('開始・終了を確認してください。');const padding=(b-a)*.1;return view(a-padding,b+padding);}));
 $('draftExport').addEventListener('click',guarded(async()=>{try{await exportDoc('draft');}catch(e){downloadDraft();throw new Error(e.message+' ブラウザの編集内容をJSONとして退避しました。');}}));
 $('finalExport').addEventListener('click',guarded(()=>exportDoc('final')));
+$('transferExport').addEventListener('click',guarded(async()=>{
+  if(!S.doc)return;const button=$('transferExport');button.disabled=true;button.textContent='移行ZIPを作成中…';
+  try{await saveAll();const result=await api('/api/transfer',{case_id:S.doc.case_id,revision:S.doc.revision,all_saved:$('exportAll').checked});
+    const link=document.createElement('a');link.href=result.url;link.download=result.filename;document.body.append(link);link.click();link.remove();
+    message(`${result.case_count}症例の移行ZIPを出力しました。別PCで展開し、Windows/Macの起動ファイルを開いてください。動画は別にコピーします。`);
+  }finally{button.disabled=false;button.textContent='別PCへ移す ZIP ↓';}
+}));
 $('importJson').addEventListener('change',guarded(async e=>{try{if(!S.doc)throw new Error('先に症例を選択してください。');const file=e.target.files[0];if(!file)return;const doc=JSON.parse(await file.text());await api('/api/validate',doc);if(doc.case_id!==S.doc.case_id)throw new Error('現在の症例とJSONの症例が異なります。対応する症例を選択してください。');if(!confirm('現在の編集内容を、このJSONの内容に置き換えますか？ 既存の保存履歴は残ります。'))return;await S.saveChain;const rev=S.doc.revision;pushHistory();S.doc=doc;S.doc.revision=rev;changed();cancelEditor();$('annotator').value=doc.annotator;$('studyRole').value=doc.study_role;$('scopeStart').value=doc.scope.start_s;$('scopeEnd').value=doc.scope.end_s;$('videoOffset').value=doc.media.offset_s;renderRows();await persist();message('JSONを読み込み、保存しました。');}finally{e.target.value='';}}));
 $('videoFile').addEventListener('change',guarded(async e=>{if(!S.doc)return;const file=e.target.files[0];if(!file)return;if(S.mediaUrl)URL.revokeObjectURL(S.mediaUrl);S.mediaUrl=URL.createObjectURL(file);$('video').src=S.mediaUrl;S.doc.media.filename=file.name;$('videoName').textContent=file.name;changed();await persist();}));
 $('videoOffset').addEventListener('change',guarded(async()=>{if(!S.doc)return;const n=Number($('videoOffset').value);if(!Number.isFinite(n))throw new Error('動画の対応時刻を確認してください。');S.doc.media.offset_s=n;changed();await persist();}));

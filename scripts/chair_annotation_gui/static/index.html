@@ -30,7 +30,7 @@
       <div class="card-heading"><div><h3>原観測とアノテーション</h3><p>ドラッグで区間を選択 · クリックで時刻を指定</p></div><div class="toolbar"><button id="zoomSelection" title="選択区間を拡大">選択を拡大</button><button id="zoomOut">−</button><button id="zoomIn">＋</button><button id="resetView">全体</button></div></div>
       <div class="signal-controls"><label>信号1<select id="signal1"></select></label><label>信号2<select id="signal2"></select></label><label>信号3<select id="signal3"></select></label><span id="plotCounts" class="subtle"></span></div>
       <canvas id="timeline" aria-label="原ログ・既存注釈・編集区間の時間軸。区間は右の秒数入力でも指定できます。"></canvas>
-      <div class="timeline-footer"><span id="cursorTime">時刻 —</span><span>点＝原観測値。補間なし。イベントの空白は「処置なし」ではありません。</span></div>
+      <div class="timeline-footer"><span id="cursorTime">時刻 —</span><span>点＝原観測値。補間なし。信号名は暫定解釈です。イベントの空白は「処置なし」ではありません。</span></div>
     </section>
     <section class="card review-card">
       <div class="card-heading"><div><h3>連続区間 <span id="intervalCount" class="count">0</span></h3><p id="coverageText">対象範囲を確認してください</p></div><div class="toolbar"><button id="newInterval">＋ 区間</button><button id="fillGaps">未記入を「不明」に</button><button id="undoButton" disabled>元に戻す</button></div></div>
@@ -42,7 +42,7 @@
       <details id="legacyDetails"><summary>既存の注釈を参照 <span id="legacyCount" class="count">0</span></summary><p class="subtle">原データを変更しません。「下書きへ追加」後に、器具の英語名と確認根拠を見直してください。</p><div id="legacyRows"></div></details>
       <details id="mediaDetails"><summary>確認用の動画を開く</summary><p class="subtle">動画はこのブラウザ内で再生します。サーバーへのアップロードはありません。再起動時は同じ動画を選び直してください。</p><input id="videoFile" type="file" accept="video/*"><label>動画の0秒に対応するログ時刻（秒）<input id="videoOffset" type="number" step="0.001" value="0"></label><p id="videoName" class="subtle"></p><video id="video" controls preload="metadata"></video><div class="toolbar"><button id="videoToCursor">動画を指定時刻へ</button><button id="startFromVideo">動画時刻 → 開始</button><button id="endFromVideo">動画時刻 → 終了</button><span id="videoTime" class="subtle"></span></div></details>
     </section>
-    <section class="export-bar"><div><strong>注釈を持ち出す</strong><p>JSONで再編集、CSVで解析。品質チェックと原ログのSHA256を含みます。</p><label class="batch-option"><input id="exportAll" type="checkbox"> 全保存症例をまとめる（未保存症例は対象外）</label></div><div class="export-actions"><label class="button secondary">JSON再読込<input id="importJson" type="file" accept=".json,application/json" hidden></label><button id="draftExport">下書き出力</button><button id="finalExport" class="primary">最終出力 ZIP ↓</button></div></section>
+    <section class="export-bar"><div><strong>注釈を持ち出す</strong><p>JSONで再編集、CSVで解析。品質チェックと原ログのSHA256を含みます。</p><label class="batch-option"><input id="exportAll" type="checkbox"> 全保存症例をまとめる（未保存症例は対象外）</label></div><div class="export-actions"><label class="button secondary">JSON再読込<input id="importJson" type="file" accept=".json,application/json" hidden></label><button id="draftExport">下書き出力</button><button id="finalExport" class="primary">最終出力 ZIP ↓</button><button id="transferExport" class="secondary" title="アプリ・原ログ・注釈履歴を含むZIP。動画は含みません。">別PCへ移す ZIP ↓</button></div></section>
   </section>
   <aside class="editor-panel">
     <div class="editor-heading"><div class="eyebrow">INTERVAL EDITOR</div><h2 id="editorTitle">区間を記録</h2><p id="editorHint" class="subtle">臨床行為とログの観測状況を分けて記録します。</p></div>

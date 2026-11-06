@@ -81,3 +81,6 @@ Replayの出力先も未使用のディレクトリ名を指定してくださ�
 器具、確認根拠、境界の不確実性を記録し、症例単位・全保存症例のJSON/CSVを
 ZIPに出力できます。起動と操作は [README](chair_annotation_gui/README.md) を参照してください。
 
+Windows・macOS用の起動ファイルと、原ログ・注釈履歴を含む移行ZIP機能もあります。
+移行手順は `chair_annotation_gui/PORTABLE_GUIDE.html` をブラウザで開いて確認してください。
+

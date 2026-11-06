@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 APP = Path(__file__).resolve().parent
 VERSION = "chair-continuous-annotation-v1"
-INSTRUMENTS = json.loads((APP / "instruments.json").read_text())
+INSTRUMENTS = json.loads((APP / "instruments.json").read_text(encoding="utf-8"))
 TARGET_CODES = {"20039", "20011", "20101", "20742", "20743", "20108", "20774", "20776", "10014", "10015", "90012"}
 ENUMS = {
     "clinical_status": {"treatment", "procedure_unspecified", "no_procedure", "unknown"},
@@ -232,7 +232,7 @@ class Store:
         marker = self.output / "app_version.json"
         if self.output.exists() and any(self.output.iterdir()) and not marker.exists():
             raise ValueError("既存の別用途フォルダには書き込みません。新しい保存先を指定してください。")
-        if marker.exists() and json.loads(marker.read_text()).get("schema_version") != VERSION:
+        if marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("schema_version") != VERSION:
             raise ValueError("保存先のバージョンが一致しません。")
         self.output.mkdir(parents=True, exist_ok=True)
         if not marker.exists():
@@ -313,7 +313,7 @@ class Store:
         case = self.case(cid)
         latest = self.output / "cases" / self.key(cid) / "latest.json"
         if latest.exists():
-            doc = json.loads(latest.read_text())
+            doc = json.loads(latest.read_text(encoding="utf-8"))
             validate(doc, case)
             return doc
         return dict(schema_version=VERSION, case_id=cid, seq=case["seq"], source_sha256=case["source_sha256"],
@@ -411,7 +411,7 @@ class Store:
         with self.lock:
             if mode not in {"draft", "final"}:
                 raise ValueError("出力モードが不正です。")
-            docs = [json.loads(p.read_text()) for p in sorted((self.output / "cases").glob("*/latest.json"))]
+            docs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((self.output / "cases").glob("*/latest.json"))]
             if not docs:
                 raise ValueError("保存済みの症例がありません。")
             failures = []
@@ -461,6 +461,22 @@ class Store:
             os.replace(temp, folder / name)
             return {"filename": name, "url": "/exports/" + name, "case_count": len(docs), "interval_count": len(rows)}
 
+    def transfer(self, cid, revision, all_saved=False):
+        from portable import build_package
+        with self.lock:
+            doc = self.document(cid)
+            if doc["revision"] != revision or revision < 1:
+                raise RuntimeError("転送前に最新の編集内容を保存してください。")
+            if all_saved:
+                ids = [json.loads(p.read_text(encoding="utf-8"))["case_id"]
+                       for p in sorted((self.output / "cases").glob("*/latest.json"))]
+            else:
+                ids = [cid]
+            name = "chairlog_transfer_" + uuid.uuid4().hex[:12] + ".zip"
+            result = build_package(self.output / "exports" / name, self, ids)
+            result["url"] = "/exports/" + name
+            return result
+
 
 def handler(store, token, port):
     class Handler(BaseHTTPRequestHandler):
@@ -485,6 +501,19 @@ def handler(store, token, port):
             if self.headers.get("Host") not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
                 raise ValueError("localhost からアクセスしてください。")
 
+        def send_download(self, path):
+            # Transfer ZIPs may contain many raw logs; do not load the archive into RAM.
+            with path.open("rb") as stream:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(os.fstat(stream.fileno()).st_size))
+                self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    self.wfile.write(chunk)
+
         def do_GET(self):
             try:
                 self.check_host()
@@ -492,7 +521,7 @@ def handler(store, token, port):
                 q = parse_qs(u.query)
                 cid = q.get("id", [""])[0]
                 if u.path == "/api/config":
-                    self.send(dict(token=token, schema_version=VERSION, instruments=INSTRUMENTS, output=str(store.output),
+                    self.send(dict(token=token, schema_version=VERSION, app_release="1.1-portable", instruments=INSTRUMENTS, output=str(store.output),
                                    case_count=len(store.cases), target_codes=sorted(TARGET_CODES)))
                 elif u.path == "/api/cases":
                     self.send([{k: v for k, v in c.items() if k != "path"} for c in sorted(store.cases.values(), key=lambda x: (x["seq"], x["case_id"]))])
@@ -517,9 +546,9 @@ def handler(store, token, port):
                     self.send(signals)
                 elif u.path.startswith("/exports/"):
                     name = u.path.removeprefix("/exports/")
-                    if not re.fullmatch(r"annotations_(seq\d+_r\d+|collection)_(draft|final)_[a-f0-9]{10}\.zip", name):
+                    if not re.fullmatch(r"(annotations_(seq\d+_r\d+|collection)_(draft|final)_[a-f0-9]{10}|chairlog_transfer_[a-f0-9]{12})\.zip", name):
                         raise ValueError("出力ファイル名が不正です。")
-                    self.send((store.output / "exports" / name).read_bytes(), content_type="application/zip", disposition=f'attachment; filename="{name}"')
+                    self.send_download(store.output / "exports" / name)
                 else:
                     files = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"), "/style.css": ("style.css", "text/css; charset=utf-8")}
                     if u.path not in files:
@@ -555,6 +584,10 @@ def handler(store, token, port):
                     self.send(store.export(body["case_id"], body["revision"], body["mode"]))
                 elif self.path == "/api/export_all":
                     self.send(store.export_all(body["mode"]))
+                elif self.path == "/api/transfer":
+                    if type(body.get("all_saved", False)) is not bool:
+                        raise ValueError("all_saved は true/false で指定してください。")
+                    self.send(store.transfer(body["case_id"], body["revision"], body.get("all_saved", False)))
                 else:
                     self.send({"error": "Not found"}, 404)
             except RuntimeError as exc:
@@ -563,6 +596,12 @@ def handler(store, token, port):
                 self.send({"error": str(exc)}, 400)
 
     return Handler
+
+
+def create_server(store, port=0):
+    server = ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)
+    server.RequestHandlerClass = handler(store, secrets.token_urlsafe(32), server.server_port)
+    return server
 
 
 def main():
@@ -574,8 +613,8 @@ def main():
     root = args.root.resolve()
     output = args.output or root / "Output" / "chair_continuous_annotations_v1"
     store = Store(root, output)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler(store, secrets.token_urlsafe(32), args.port))
-    print(f"Annotation GUI: http://127.0.0.1:{args.port}\nSource logs are read-only. Stop with Ctrl+C.", flush=True)
+    server = create_server(store, args.port)
+    print(f"Annotation GUI: http://127.0.0.1:{server.server_port}\nSource logs are read-only. Stop with Ctrl+C.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
