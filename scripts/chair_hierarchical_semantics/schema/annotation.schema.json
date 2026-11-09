@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Device evidence and hierarchical clinical assertion sidecar",
+  "type": "object",
+  "required": ["schema_version", "interval_id", "case_id", "start_s", "end_s", "observation_context", "clinical_reference", "inferred_candidates"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "interval_id": {"type": "string"},
+    "case_id": {"type": "string"},
+    "start_s": {"type": "number", "minimum": 0},
+    "end_s": {"type": "number", "minimum": 0},
+    "source_preserved": {"type": "object"},
+    "observation_context": {
+      "type": "object",
+      "required": ["new_event_recording_status", "raw_records_in_interval", "acquisition_coverage", "device_fact_selector", "state_records_at_start", "syringe_air_water_channel_status"],
+      "properties": {
+        "new_event_recording_status": {"enum": ["Recorded", "Not recorded"]},
+        "raw_records_in_interval": {"type": "integer", "minimum": 0},
+        "acquisition_coverage": {"const": "Unknown"},
+        "device_fact_selector": {"type": "object"},
+        "state_records_at_start": {"type": "array"},
+        "syringe_air_water_channel_status": {"const": "Unknown"}
+      }
+    },
+    "clinical_reference": {"$ref": "#/definitions/assertion"},
+    "inferred_candidates": {"type": "array", "items": {"$ref": "#/definitions/assertion"}}
+  },
+  "definitions": {
+    "assertion": {
+      "type": "object",
+      "required": ["domain", "assertion_source", "evidence_basis", "interpretation_status", "concept_id", "resolved_depth", "human_confirmed"],
+      "properties": {
+        "domain": {"enum": ["clinical_action", "device_observation"]},
+        "assertion_source": {"enum": ["human_annotation", "annotation_gap", "model_inference", "raw_event", "carried_device_state"]},
+        "evidence_basis": {"enum": ["Observed", "Inferred", "Unspecified"]},
+        "interpretation_status": {"enum": ["Identified", "Unknown"]},
+        "concept_id": {"type": ["string", "null"]},
+        "resolved_depth": {"type": "integer", "minimum": 0, "maximum": 3},
+        "human_confirmed": {"type": "boolean"},
+        "source_refs": {"type": "array"}
+      },
+      "allOf": [
+        {"if": {"properties": {"domain": {"const": "clinical_action"}}}, "then": {"properties": {"evidence_basis": {"enum": ["Inferred", "Unspecified"]}}}},
+        {"if": {"properties": {"assertion_source": {"const": "model_inference"}}}, "then": {"properties": {"evidence_basis": {"const": "Inferred"}, "human_confirmed": {"const": false}}}},
+        {"if": {"properties": {"assertion_source": {"const": "human_annotation"}}}, "then": {"properties": {"evidence_basis": {"const": "Unspecified"}}}}
+      ]
+    }
+  }
+}
